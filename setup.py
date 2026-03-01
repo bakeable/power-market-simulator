@@ -7,7 +7,7 @@ class Setup:
         self.__setup_load_schedule()
 
     def __setup_load_schedule(self):
-        df = pd.read_csv("./data/raw/DK1 load.csv", parse_dates=["utc_timestamp"])
+        df = pd.read_csv("DK1 load.csv", parse_dates=["utc_timestamp"])
         df["utc_timestamp"] = df["utc_timestamp"].dt.tz_localize(None)
         df["date"] = df["utc_timestamp"].dt.normalize()
         df["hour"] = df["utc_timestamp"].dt.hour
@@ -118,3 +118,4 @@ class Setup:
         bids["id"] = bids.index
         bids = bids[[bids.columns[-1], *bids.columns[:-1]]].copy()
         self.original_bids = bids.copy()
+
