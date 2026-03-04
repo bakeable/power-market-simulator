@@ -2,17 +2,27 @@ from standard import *
 
 
 class Market:
-    def __init__(self, initial_bids_state: pd.DataFrame, load_schedule: pd.DataFrame):
+    def __init__(
+        self,
+        initial_bids_state: pd.DataFrame,
+        load_schedule: pd.DataFrame,
+        variable_bids: pd.DataFrame | None = None,
+    ):
         self.bids = initial_bids_state
         self.load_schedule = load_schedule
+        self.variable_bids = variable_bids
         self.logs = pd.DataFrame()
         self.market_logs = pd.DataFrame()
         self.market_log_slots = None
         self.undersupply = False
+        self.preferred_units = []
 
         # to normalize data type
         self.bids["locked"] = self.bids["locked"].astype("int32")
         self.bids["lock_time"] = self.bids["lock_time"].astype("int32")
+
+    def set_preferred_units(self, unit_ids: list = []):
+        self.preferred_units = unit_ids
 
     def start(self):
 
@@ -41,8 +51,25 @@ class Market:
             self.__calculate_cost_price()
             self.__record_logs()
 
+    def __add_variable_bids(self):
+        if self.variable_bids is None:
+            return
+        schedule = self.schedule
+        hour = self.hour
+        vb = self.variable_bids
+
+        mask = (vb["schedule"] == schedule) & (vb["hour"] == hour)
+        vb = vb[mask]
+        vb = vb.drop(columns=["schedule", "hour"])
+
+        b = self.bids_now.copy()
+        b = pd.concat([b, vb])
+        self.bids_now = b.copy()
+
     def __prepare_new_bids(self):
         b = self.bids_now.copy()
+        b = b[~b["type"].isin(["solar", "wind"])]
+
         b["prev_dispatch"] = np.where(b["dispatch"] > 0, b["dispatch"], b["p_min"])
         b["max_cap"] = np.where(
             b["prev_dispatch"] + b["ramp_hour"] <= b["p_max"],
@@ -67,7 +94,7 @@ class Market:
                 market_log_slots.append((schedule, hour))
         self.market_log_slots = market_log_slots
 
-    def __log_market_log(self, event_label="", final=False):
+    def __log_market_log(self, event_label=""):
         if not self.logging:
             return
 
@@ -86,6 +113,7 @@ class Market:
         self.__log_market_log("start")
 
         self.__prepare_new_bids()
+        self.__add_variable_bids()
         self.__update_locks()
         self.__order_by_merit()
         if self.undersupply:
@@ -97,7 +125,7 @@ class Market:
 
         # 1. shutdown non-preferred unit
         if self.constraints_found:
-            self.__shutdown_nonpreferred(preferred_ids=[])  # try 35,34
+            self.__shutdown_nonpreferred()
             self.__order_by_merit()
             if self.undersupply:
                 return
@@ -196,7 +224,9 @@ class Market:
         self.bids_now = b.copy()
         self.__log_market_log("checking_constraint")
 
-    def __shutdown_nonpreferred(self, preferred_ids=[]):
+    def __shutdown_nonpreferred(self):
+
+        preferred_ids = self.preferred_units
 
         b = self.bids_now.copy()
         mask = (b["constrained"] == 1) & (
