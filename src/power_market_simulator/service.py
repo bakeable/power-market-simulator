@@ -115,7 +115,7 @@ def _expand_simple_mix(mix: SimpleMix) -> list[GeneratorSpec]:
             continue
         defaults = _SIMPLE_DEFAULTS[tech]
         unit_size = defaults["unit_size"]
-        n_units = max(1, int(np.ceil(total_mw / unit_size)))
+        n_units = min(max(1, int(np.ceil(total_mw / unit_size))), 50)
         per_unit_mw = total_mw / n_units
         for i in range(n_units):
             specs.append(

@@ -101,6 +101,7 @@ class DemandProfile(BaseModel):
 
     series: list[float] | None = Field(
         None,
+        max_length=8760,
         description="Explicit hourly demand time series (MW). "
         "Length must match horizon_hours.",
     )
@@ -125,9 +126,9 @@ class SimulationRequest(BaseModel):
     """Top-level simulation request."""
 
     scenario_name: str = Field(
-        "default", description="Human-readable scenario label"
+        "default", max_length=200, description="Human-readable scenario label"
     )
-    description: str = Field("", description="Optional longer description")
+    description: str = Field("", max_length=2000, description="Optional longer description")
     horizon_hours: int = Field(
         24,
         ge=1,
@@ -148,6 +149,7 @@ class SimulationRequest(BaseModel):
     )
     generators: list[GeneratorSpec] | None = Field(
         None,
+        max_length=200,
         description="Detailed generator list for advanced mode",
     )
 
