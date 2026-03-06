@@ -52,7 +52,7 @@ class Market:
         self.energy_costs: float = 0.0
         self.mcp: float = 0.0
         self.system_costs: float = 0.0
-        self.event_squence: int = 0
+        self.event_sequence: int = 0
         self.logging: bool = False
         self.constraints_found: bool = False
         self.curtailment_feasible: bool | None = None
@@ -75,7 +75,7 @@ class Market:
             self.startup_costs = 0.0
             self.energy_costs = 0.0
 
-            self.event_squence = 0
+            self.event_sequence = 0
             self.logging = False
             if self.market_log_slots is not None:
                 if (self.schedule, self.hour) in self.market_log_slots:
@@ -152,10 +152,10 @@ class Market:
 
         b = self.bids_now.copy()
         b["event"] = event_label
-        b["sequence"] = self.event_squence
+        b["sequence"] = self.event_sequence
         b["schedule"] = self.schedule
         b["hour"] = self.hour
-        self.event_squence += 1
+        self.event_sequence += 1
         self.market_logs = pd.concat([self.market_logs, b])
 
     # ------------------------------------------------------------------

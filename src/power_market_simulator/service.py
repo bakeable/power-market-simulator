@@ -194,7 +194,8 @@ def run_simulation(request: SimulationRequest) -> SimulationResponse:
         specs = request.generators
     else:
         mix = request.simple_mix or SimpleMix()
-        if mix.nuclear_mw == 0 and mix.gas_mw == 0 and mix.coal_mw == 0 and mix.hydro_mw == 0 and mix.solar_mw == 0 and mix.wind_mw == 0:
+        total_capacity = sum([mix.nuclear_mw, mix.gas_mw, mix.coal_mw, mix.hydro_mw, mix.solar_mw, mix.wind_mw])
+        if total_capacity == 0:
             # Provide a sensible default
             mix = SimpleMix(nuclear_mw=2000, gas_mw=1500, hydro_mw=500)
             warnings.append("No generation mix specified – using default mix (nuclear 2000, gas 1500, hydro 500 MW)")
