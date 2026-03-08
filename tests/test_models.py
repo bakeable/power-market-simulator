@@ -8,6 +8,7 @@ from pydantic import ValidationError
 from api.models import (
     DemandProfile,
     GeneratorSpec,
+    HistoricalForecastConfig,
     SimpleMix,
     SimulationRequest,
 )
@@ -51,6 +52,43 @@ class TestDemandProfile:
     def test_series_demand(self):
         d = DemandProfile(series=[100, 200, 300])
         assert d.series == [100, 200, 300]
+
+    def test_historical_forecast_demand(self):
+        d = DemandProfile(historical_forecast=HistoricalForecastConfig())
+        assert d.historical_forecast is not None
+        assert d.series is None
+        assert d.flat_demand_mw is None
+
+    def test_historical_forecast_with_params(self):
+        cfg = HistoricalForecastConfig(start_hour=8, start_dow=1, start_month=6)
+        d = DemandProfile(historical_forecast=cfg)
+        assert d.historical_forecast.start_hour == 8
+        assert d.historical_forecast.start_dow == 1
+        assert d.historical_forecast.start_month == 6
+
+
+class TestHistoricalForecastConfig:
+    def test_defaults(self):
+        cfg = HistoricalForecastConfig()
+        assert cfg.start_hour == 0
+        assert cfg.start_dow == 0
+        assert cfg.start_month == 1
+
+    def test_rejects_invalid_hour(self):
+        with pytest.raises(ValidationError):
+            HistoricalForecastConfig(start_hour=24)
+
+    def test_rejects_invalid_dow(self):
+        with pytest.raises(ValidationError):
+            HistoricalForecastConfig(start_dow=7)
+
+    def test_rejects_invalid_month_zero(self):
+        with pytest.raises(ValidationError):
+            HistoricalForecastConfig(start_month=0)
+
+    def test_rejects_invalid_month_thirteen(self):
+        with pytest.raises(ValidationError):
+            HistoricalForecastConfig(start_month=13)
 
 
 class TestSimulationRequest:

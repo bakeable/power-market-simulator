@@ -40,6 +40,42 @@ poetry run pytest -v
 | `/health` | GET | Liveness probe |
 | `/simulate` | POST | Run a market simulation |
 
+### Demand options
+
+Three demand specification modes are supported:
+
+| Mode | Field | Description |
+|------|-------|-------------|
+| Explicit series | `demand.series` | List of hourly MW values |
+| Flat constant | `demand.flat_demand_mw` | Same MW value every hour |
+| Historical forecast | `demand.historical_forecast` | Derive from DK1 historical averages |
+
+The **historical forecast** option uses mean load values from the bundled DK1 dataset
+(ENTSO-E 2015–2020), grouped by *(hour-of-day, day-of-week, month)*, to generate a
+realistic demand profile without requiring you to provide explicit values.
+
+```json
+{
+  "scenario_name": "Monday morning in January",
+  "horizon_hours": 24,
+  "mode": "simple",
+  "demand": {
+    "historical_forecast": {
+      "start_hour": 0,
+      "start_dow": 0,
+      "start_month": 1
+    }
+  },
+  "simple_mix": {
+    "nuclear_mw": 2000,
+    "gas_mw": 1500,
+    "hydro_mw": 500
+  }
+}
+```
+
+`start_dow` follows Python's convention: `0 = Monday`, `6 = Sunday`.
+
 ### Simulation modes
 
 **Simple mode** – provide a high-level generation mix:
@@ -136,6 +172,7 @@ src/
     engine/
       market.py                 # Market class – merit-order dispatch + constraints
       setup.py                  # Load schedule & generator bid setup
+      forecast.py               # LoadForecaster – demand forecasting from historical data
       solar.py                  # Solar power producer (cosine² curve)
       weather.py                # Stochastic weather factor generation
     service.py                  # Service layer: Pydantic models ↔ engine DataFrames

@@ -96,8 +96,56 @@ class GeneratorSpec(BaseModel):
     }
 
 
+class HistoricalForecastConfig(BaseModel):
+    """Configuration for generating demand from historical load averages.
+
+    The forecaster looks up the mean load for every *(hour-of-day,
+    day-of-week, month)* combination in the bundled DK1 historical dataset
+    and produces a typical demand profile starting at the given calendar
+    point.  This is a deterministic "what-if" demand series, not a
+    probabilistic prediction.
+    """
+
+    start_hour: int = Field(
+        0,
+        ge=0,
+        le=23,
+        description="Hour of day at which the forecast starts (0–23).",
+    )
+    start_dow: int = Field(
+        0,
+        ge=0,
+        le=6,
+        description="Day of the week at which the forecast starts "
+        "(0=Monday, 6=Sunday).",
+    )
+    start_month: int = Field(
+        1,
+        ge=1,
+        le=12,
+        description="Calendar month at which the forecast starts (1–12).",
+    )
+
+    model_config = {
+        "json_schema_extra": {
+            "examples": [
+                {"start_hour": 8, "start_dow": 0, "start_month": 6},
+            ]
+        }
+    }
+
+
 class DemandProfile(BaseModel):
-    """Demand specification – either an explicit hourly series or a flat value."""
+    """Demand specification.
+
+    Exactly one of the three fields should be populated:
+
+    * ``series`` – an explicit hourly demand time series (MW).
+    * ``flat_demand_mw`` – a constant demand level repeated for every hour.
+    * ``historical_forecast`` – derive demand from historical DK1 averages.
+
+    When none are provided the service falls back to a constant 2 000 MW.
+    """
 
     series: list[float] | None = Field(
         None,
@@ -111,12 +159,18 @@ class DemandProfile(BaseModel):
         description="Constant demand for every hour (MW). "
         "Used only when 'series' is not provided.",
     )
+    historical_forecast: HistoricalForecastConfig | None = Field(
+        None,
+        description="Derive demand from historical DK1 load averages. "
+        "Evaluated only when both 'series' and 'flat_demand_mw' are absent.",
+    )
 
     model_config = {
         "json_schema_extra": {
             "examples": [
                 {"flat_demand_mw": 2000},
                 {"series": [1800, 1750, 1700, 1680]},
+                {"historical_forecast": {"start_hour": 0, "start_dow": 0, "start_month": 1}},
             ]
         }
     }
