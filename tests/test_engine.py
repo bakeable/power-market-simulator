@@ -5,6 +5,7 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
+from power_market_simulator.engine.forecast import LoadForecaster
 from power_market_simulator.engine.market import Market
 from power_market_simulator.engine.setup import Setup
 
@@ -171,3 +172,98 @@ class TestMarketBasic:
         m.start()
         unique_intervals = m.logs.drop_duplicates(subset=["schedule", "hour"])
         assert len(unique_intervals) == n_hours
+
+
+class TestLoadForecaster:
+    """Tests for the LoadForecaster class."""
+
+    def test_forecast_length(self):
+        """Forecast should return exactly horizon_hours values."""
+        forecaster = LoadForecaster()
+        result = forecaster.forecast(horizon_hours=24)
+        assert len(result) == 24
+
+    def test_forecast_positive_values(self):
+        """All forecasted demand values should be positive MW figures."""
+        forecaster = LoadForecaster()
+        result = forecaster.forecast(horizon_hours=48)
+        assert all(v > 0 for v in result), "Expected all demand values to be positive"
+
+    def test_forecast_single_hour(self):
+        """A one-hour forecast should return a single value."""
+        forecaster = LoadForecaster()
+        result = forecaster.forecast(horizon_hours=1, start_hour=12, start_dow=0, start_month=6)
+        assert len(result) == 1
+
+    def test_forecast_varies_by_start(self):
+        """Forecasts starting at different times should produce different profiles."""
+        forecaster = LoadForecaster()
+        night = forecaster.forecast(horizon_hours=1, start_hour=3, start_dow=0, start_month=1)
+        midday = forecaster.forecast(horizon_hours=1, start_hour=12, start_dow=0, start_month=1)
+        # Night load should generally be lower than midday load in power systems
+        assert night != midday
+
+    def test_forecast_varies_by_month(self):
+        """Winter and summer forecasts should differ due to seasonal load patterns."""
+        forecaster = LoadForecaster()
+        winter = forecaster.forecast(horizon_hours=24, start_hour=0, start_dow=0, start_month=1)
+        summer = forecaster.forecast(horizon_hours=24, start_hour=0, start_dow=0, start_month=7)
+        assert winter != summer
+
+    def test_forecast_invalid_horizon(self):
+        """horizon_hours < 1 should raise ValueError."""
+        forecaster = LoadForecaster()
+        with pytest.raises(ValueError, match="horizon_hours"):
+            forecaster.forecast(horizon_hours=0)
+
+    def test_forecast_invalid_start_hour(self):
+        """start_hour outside [0, 23] should raise ValueError."""
+        forecaster = LoadForecaster()
+        with pytest.raises(ValueError, match="start_hour"):
+            forecaster.forecast(horizon_hours=1, start_hour=24)
+
+    def test_forecast_invalid_start_dow(self):
+        """start_dow outside [0, 6] should raise ValueError."""
+        forecaster = LoadForecaster()
+        with pytest.raises(ValueError, match="start_dow"):
+            forecaster.forecast(horizon_hours=1, start_dow=7)
+
+    def test_forecast_invalid_start_month(self):
+        """start_month outside [1, 12] should raise ValueError."""
+        forecaster = LoadForecaster()
+        with pytest.raises(ValueError, match="start_month"):
+            forecaster.forecast(horizon_hours=1, start_month=13)
+
+    def test_forecast_week_wraps(self):
+        """Forecasting beyond 7 days should wrap day-of-week correctly."""
+        forecaster = LoadForecaster()
+        # 168 hours = 1 week; starting Monday should end on Sunday
+        result = forecaster.forecast(horizon_hours=168, start_hour=0, start_dow=0, start_month=1)
+        assert len(result) == 168
+
+    def test_forecast_month_advances_over_long_horizon(self):
+        """A multi-month forecast should use different month averages over time."""
+        forecaster = LoadForecaster()
+        # 720 hours ≈ 30 days; starting in January should eventually use Feb averages
+        result = forecaster.forecast(horizon_hours=720, start_hour=0, start_dow=0, start_month=1)
+        assert len(result) == 720
+        # The first 24h (January) and last 24h (around February) should differ
+        # because seasonal averages differ between months
+        first_day = result[:24]
+        last_day = result[696:]
+        assert first_day != last_day
+
+    def test_forecaster_usable_as_demand_in_simulation(self):
+        """A forecasted demand list should drive a full market simulation."""
+        forecaster = LoadForecaster()
+        demand = forecaster.forecast(horizon_hours=24, start_hour=0, start_dow=0, start_month=1)
+        assert len(demand) == 24
+
+        bids, ls = _make_simple_scenario(
+            demand=demand,
+            generators=[{"type": "gas", "p_max": 5000, "mc": 40}],
+        )
+        m = Market(bids, ls)
+        m.start()
+        assert not m.logs.empty
+        assert len(m.logs) == 24

@@ -17,6 +17,7 @@ from api.models import (
     DemandProfile,
     GeneratorSpec,
     GeneratorTimeSeries,
+    HistoricalForecastConfig,
     SimpleMix,
     SimulationMode,
     SimulationRequest,
@@ -24,6 +25,7 @@ from api.models import (
     SummaryMetrics,
     TechnologyAggregate,
 )
+from power_market_simulator.engine.forecast import LoadForecaster
 from power_market_simulator.engine.market import Market
 from power_market_simulator.engine.setup import Setup
 
@@ -146,6 +148,15 @@ def _build_demand(demand: DemandProfile, horizon: int) -> list[float]:
         return (series * reps)[:horizon]
     if demand.flat_demand_mw is not None:
         return [demand.flat_demand_mw] * horizon
+    if demand.historical_forecast is not None:
+        cfg: HistoricalForecastConfig = demand.historical_forecast
+        forecaster = LoadForecaster()
+        return forecaster.forecast(
+            horizon_hours=horizon,
+            start_hour=cfg.start_hour,
+            start_dow=cfg.start_dow,
+            start_month=cfg.start_month,
+        )
     # Fallback: constant 2000 MW
     return [2000.0] * horizon
 
@@ -203,6 +214,11 @@ def run_simulation(request: SimulationRequest) -> SimulationResponse:
 
     # ---- Resolve demand ----
     demand = request.demand or DemandProfile()
+    if demand.historical_forecast is not None:
+        warnings.append(
+            "Demand derived from historical DK1 load averages "
+            "(hour × day-of-week × month profile)."
+        )
     demand_list = _build_demand(demand, request.horizon_hours)
 
     # ---- Build engine inputs ----

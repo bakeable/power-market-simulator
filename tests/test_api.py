@@ -146,3 +146,56 @@ class TestSimulateEndpoint:
         assert resp.status_code == 200
         data = resp.json()
         assert data["demand_series"] == demand
+
+    def test_historical_forecast_demand(self, client: TestClient):
+        """historical_forecast demand option should produce a valid response."""
+        resp = client.post(
+            "/simulate",
+            json={
+                "scenario_name": "forecast_test",
+                "horizon_hours": 24,
+                "mode": "simple",
+                "demand": {
+                    "historical_forecast": {
+                        "start_hour": 0,
+                        "start_dow": 0,
+                        "start_month": 1,
+                    }
+                },
+                "simple_mix": {"gas_mw": 5000},
+            },
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data["demand_series"]) == 24
+        # All demand values should be positive (drawn from historical averages)
+        assert all(d > 0 for d in data["demand_series"])
+        # The informational warning about historical forecasting should be present
+        assert any("historical" in w.lower() for w in data["warnings"])
+
+    def test_historical_forecast_demand_summer_differs_from_winter(
+        self, client: TestClient
+    ):
+        """January and July forecasts should produce different demand profiles."""
+        def _simulate_and_extract_demand(month: int) -> list[float]:
+            resp = client.post(
+                "/simulate",
+                json={
+                    "horizon_hours": 24,
+                    "mode": "simple",
+                    "demand": {
+                        "historical_forecast": {
+                            "start_hour": 0,
+                            "start_dow": 0,
+                            "start_month": month,
+                        }
+                    },
+                    "simple_mix": {"gas_mw": 5000},
+                },
+            )
+            assert resp.status_code == 200
+            return resp.json()["demand_series"]
+
+        winter = _simulate_and_extract_demand(1)
+        summer = _simulate_and_extract_demand(7)
+        assert winter != summer
